@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MZH-ONYX - Sign In</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231E7A5F'%3E%3Cpath d='M12 2l2.4 7.2L22 11.6l-5.6 4.4L17.8 22 12 17.6 6.2 22l1.4-6-5.6-4.4 7.6-2.4z'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --canvas: #F7F4EF;
+      --panel: #FFFDFC;
+      --panel-soft: #F1ECE4;
+      --ink: #27231F;
+      --muted: #71695F;
+      --faint: #A79C90;
+      --line: #DDD2C3;
+      --primary: #B45F3A;
+      --primary-dark: #8F482A;
+      --primary-soft: rgba(180, 95, 58, 0.12);
+      --secondary: #3B6F69;
+      --warning: #A94F31;
+      --shadow: 0 18px 45px rgba(65, 49, 36, 0.12);
+      --error: #C84C3B;
+      --success: #3B6F69;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      width: 100vw;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink);
+      background: linear-gradient(135deg, var(--canvas) 0%, #EEE8DD 100%);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      padding: 16px;
+    }
+
+    .auth-container {
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .auth-card {
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 48px 32px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+
+    .auth-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .brand-mark {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: white;
+      background: var(--primary);
+      font-weight: 800;
+      font-size: 28px;
+      margin: 0 auto 16px;
+    }
+
+    .auth-header h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .auth-header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .auth-divider {
+      margin: 32px 0;
+      text-align: center;
+      position: relative;
+      color: var(--faint);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .auth-divider::before,
+    .auth-divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: calc((100% - 60px) / 2);
+      height: 1px;
+      background: var(--line);
+    }
+
+    .auth-divider::before {
+      left: 0;
+    }
+
+    .auth-divider::after {
+      right: 0;
+    }
+
+    .auth-providers {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .provider-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      height: 48px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel-soft);
+      color: var(--ink);
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .provider-button:hover {
+      border-color: var(--primary);
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .provider-button:active {
+      transform: translateY(0);
+    }
+
+    .provider-button.loading {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .provider-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dev-login {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+    }
+
+    .dev-login-label {
+      display: block;
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    .dev-login-form {
+      display: flex;
+      gap: 8px;
+    }
+
+    .email-auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .dev-login-input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      color: var(--ink);
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .dev-login-input::placeholder {
+      color: var(--faint);
+    }
+
+    .email-auth-form .dev-login-input {
+      flex: none;
+      width: 100%;
+    }
+
+    .dev-login-button {
+      padding: 10px 16px;
+      border: 1px solid var(--primary);
+      border-radius: 8px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .dev-login-button:hover {
+      background: var(--primary);
+      color: white;
+    }
+
+    .dev-login-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .error-message {
+      padding: 12px;
+      margin-bottom: 20px;
+      background: rgba(200, 76, 59, 0.08);
+      border: 1px solid rgba(200, 76, 59, 0.2);
+      border-radius: 8px;
+      color: var(--error);
+      font-size: 13px;
+      display: none;
+    }
+
+    .error-message.show {
+      display: block;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(0, 0, 0, 0.1);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 480px) {
+      .auth-card {
+        padding: 32px 20px;
+      }
+
+      .auth-header h1 {
+        font-size: 24px;
+      }
+
+      .provider-button {
+        height: 44px;
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="brand-mark">◆</div>
+        <h1>MZH-ONYX</h1>
+        <p>AI Workspace</p>
+      </div>
+
+      <div id="errorMessage" class="error-message"></div>
+
+      <div id="authProviders" class="auth-providers"></div>
+
+      <div id="devLoginSection" class="dev-login hidden">
+        <label class="dev-login-label">Development Login</label>
+        <form class="dev-login-form" onsubmit="handleDevLogin(event)">
+          <input
+            type="text"
+            id="devName"
+            class="dev-login-input"
+            placeholder="Your name"
+            maxlength="50"
+          >
+          <button type="submit" class="dev-login-button">Enter</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function initializeAuth() {
+      try {
+        // Check if already authenticated
+        const meRes = await fetch('/api/auth/me');
+        if (meRes.ok) {
+          const data = await meRes.json();
+          if (data.authenticated && data.user) {
+            window.location.href = '/';
+            return;
+          }
+        }
+
+        // Load auth config
+        const configRes = await fetch('/api/auth/config');
+        if (!configRes.ok) throw new Error('Failed to load auth config');
+
+        const config = await configRes.json();
+
+        // Render auth options
+        const providersContainer = document.getElementById('authProviders');
+        let html = '';
+
+        if (config.emailEnabled) {
+          html += `
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <button id="showLoginBtn" class="provider-button">Login with email</button>
+              <button id="showRegisterBtn" class="provider-button">Register with email</button>
+            </div>
+
+            <form id="emailLoginForm" class="email-auth-form hidden" onsubmit="handleEmailLogin(event)" style="margin-top:16px">
+              <input type="email" id="loginEmail" class="dev-login-input" placeholder="Email" required>
+              <input type="password" id="loginPassword" class="dev-login-input" placeholder="Password" required>
+              <button type="submit" class="dev-login-button">Sign in</button>
+            </form>
+
+            <form id="emailRegisterForm" class="email-auth-form hidden" onsubmit="handleEmailRegister(event)" style="margin-top:16px">
+              <input type="text" id="registerName" class="dev-login-input" placeholder="Full name">
+              <input type="email" id="registerEmail" class="dev-login-input" placeholder="Email" required>
+              <input type="password" id="registerPassword" class="dev-login-input" placeholder="Password" required>
+              <button type="submit" class="dev-login-button">Register</button>
+            </form>
+          `;
+        }
+
+        // Render OAuth providers (if any remain)
+        if (config.providers && config.providers.length > 0) {
+          html += config.providers.map(provider => `
+            <a href="/auth/login/${provider}" class="provider-button">
+              <span class="provider-icon">${getProviderIcon(provider)}</span>
+              <span>Continue with ${getProviderName(provider)}</span>
+            </a>
+          `).join('');
+        }
+
+        providersContainer.innerHTML = html;
+
+        // Show dev login if enabled
+        if (config.devAuthEnabled) {
+          document.getElementById('devLoginSection').classList.remove('hidden');
+        }
+
+        // Attach handlers
+        const showLoginBtn = document.getElementById('showLoginBtn');
+        const showRegisterBtn = document.getElementById('showRegisterBtn');
+        if (showLoginBtn) showLoginBtn.addEventListener('click', () => {
+          document.getElementById('emailLoginForm').classList.remove('hidden');
+          document.getElementById('emailRegisterForm').classList.add('hidden');
+        });
+        if (showRegisterBtn) showRegisterBtn.addEventListener('click', () => {
+          document.getElementById('emailRegisterForm').classList.remove('hidden');
+          document.getElementById('emailLoginForm').classList.add('hidden');
+        });
+
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        showError('Failed to load authentication options');
+      }
+    }
+
+    async function handleDevLogin(event) {
+      event.preventDefault();
+      const nameInput = document.getElementById('devName');
+      const button = event.target.querySelector('button');
+
+      try {
+        button.disabled = true;
+        const name = nameInput.value.trim() || 'MZH User';
+
+        const res = await fetch('/api/auth/dev-login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+
+        if (!res.ok) throw new Error('Development login failed');
+
+        window.location.href = '/';
+      } catch (error) {
+        console.error('Dev login error:', error);
+        showError('Development login failed. Please try again.');
+        button.disabled = false;
+      }
+    }
+
+    async function handleEmailLogin(event) {
+      event.preventDefault();
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Login failed' }));
+          throw new Error(err.error || 'Login failed');
+        }
+        window.location.href = '/';
+      } catch (e) {
+        showError(e.message || 'Login failed');
+      }
+    }
+
+    async function handleEmailRegister(event) {
+      event.preventDefault();
+      const name = document.getElementById('registerName').value;
+      const email = document.getElementById('registerEmail').value;
+      const password = document.getElementById('registerPassword').value;
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Registration failed' }));
+          throw new Error(err.error || 'Registration failed');
+        }
+        window.location.href = '/';
+      } catch (e) {
+        showError(e.message || 'Registration failed');
+      }
+    }
+
+    function getProviderIcon(provider) {
+      const icons = {
+        github: '🐙'
+      };
+      return icons[provider.toLowerCase()] || '●';
+    }
+
+    function getProviderName(provider) {
+      const names = {
+        github: 'GitHub'
+      };
+      return names[provider.toLowerCase()] || provider;
+    }
+
+    function showError(message) {
+      const errorEl = document.getElementById('errorMessage');
+      errorEl.textContent = message;
+      errorEl.classList.add('show');
+      setTimeout(() => {
+        errorEl.classList.remove('show');
+      }, 5000);
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', initializeAuth);
+  </script>
+</body>
+</html>

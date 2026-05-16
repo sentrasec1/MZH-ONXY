@@ -14,19 +14,63 @@ const sessions = new Map();
 const oauthStates = new Map();
 const OAUTH_PROVIDER = (process.env.OAUTH_PROVIDER || 'github').toLowerCase();
 
-const OAUTH = {
-  provider: OAUTH_PROVIDER,
-  authUrl: process.env.OAUTH_AUTH_URL,
-  tokenUrl: process.env.OAUTH_TOKEN_URL,
-  userInfoUrl: process.env.OAUTH_USERINFO_URL,
-  emailsUrl: process.env.OAUTH_EMAILS_URL,
-  clientId: process.env.OAUTH_CLIENT_ID,
-  clientSecret: process.env.OAUTH_CLIENT_SECRET,
-  redirectUri: process.env.OAUTH_REDIRECT_URI || `http://localhost:${PORT}/auth/callback`,
-  scope: process.env.OAUTH_SCOPE
+// User database file
+const USERS_DB_FILE = path.join(__dirname, 'users.json');
+
+function loadUsersDB() {
+  try {
+    if (fs.existsSync(USERS_DB_FILE)) {
+      const data = fs.readFileSync(USERS_DB_FILE, 'utf8');
+      return new Map(JSON.parse(data));
+    }
+  } catch (error) {
+    console.error('Error loading users DB:', error);
+  }
+  return new Map();
+}
+
+function saveUsersDB(usersMap) {
+  try {
+    const data = JSON.stringify(Array.from(usersMap.entries()));
+    fs.writeFileSync(USERS_DB_FILE, data, 'utf8');
+  } catch (error) {
+    console.error('Error saving users DB:', error);
+  }
+}
+
+const users = loadUsersDB();
+
+// Multi-provider OAuth configuration (only GitHub enabled by default)
+const OAUTH_PROVIDERS = {
+  github: {
+    authUrl: 'https://github.com/login/oauth/authorize',
+    tokenUrl: 'https://github.com/login/oauth/access_token',
+    userInfoUrl: 'https://api.github.com/user',
+    emailsUrl: 'https://api.github.com/user/emails',
+    clientId: process.env.OAUTH_CLIENT_ID || process.env.GITHUB_OAUTH_CLIENT_ID,
+    clientSecret: process.env.OAUTH_CLIENT_SECRET || process.env.GITHUB_OAUTH_CLIENT_SECRET,
+    scope: 'read:user user:email',
+    usesPKCE: false
+  }
 };
 
-applyProviderDefaults(OAUTH);
+// Determine active OAuth providers
+const OAUTH = {};
+const AVAILABLE_PROVIDERS = [];
+
+if (OAUTH_PROVIDERS.github.clientId) {
+  OAUTH.github = OAUTH_PROVIDERS.github;
+  OAUTH.github.redirectUri = process.env.OAUTH_REDIRECT_URI || `http://localhost:${PORT}/auth/callback`;
+  AVAILABLE_PROVIDERS.push('github');
+}
+
+// For backward compatibility, default to github if OAUTH_PROVIDER env var is set
+if (OAUTH_PROVIDER && OAUTH_PROVIDER !== 'github' && !AVAILABLE_PROVIDERS.length) {
+  const custom = { ...OAUTH_PROVIDERS[OAUTH_PROVIDER] };
+  custom.redirectUri = process.env.OAUTH_REDIRECT_URI || `http://localhost:${PORT}/auth/callback`;
+  OAUTH[OAUTH_PROVIDER] = custom;
+  AVAILABLE_PROVIDERS.push(OAUTH_PROVIDER);
+}
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || (IS_PROD ? '' : readSecretFile('open_apikey.txt'));
@@ -42,10 +86,6 @@ const PREFERRED_HOSTED_MODELS = [
 
 if (IS_PROD && !SESSION_SECRET) {
   throw new Error('SESSION_SECRET is required when NODE_ENV=production.');
-}
-
-if (IS_PROD && !hasOAuthConfig()) {
-  throw new Error('OAuth is required when NODE_ENV=production. Set OAUTH_AUTH_URL, OAUTH_TOKEN_URL, and OAUTH_CLIENT_ID.');
 }
 
 app.disable('x-powered-by');
@@ -83,15 +123,26 @@ app.get('/healthz', (_req, res) => {
   res.json({
     ok: true,
     production: IS_PROD,
-    oauthConfigured: hasOAuthConfig(),
+    oauthConfigured: AVAILABLE_PROVIDERS.length > 0,
+    providers: AVAILABLE_PROVIDERS,
     hostedModelsConfigured: Boolean(OPENROUTER_API_KEY)
   });
 });
 
+app.get('/login', (req, res) => {
+  const user = getUser(req);
+  if (user) {
+    return res.redirect('/');
+  }
+  res.sendFile(path.join(__dirname, 'login.html'));
+});
+
 app.get('/api/auth/config', (_req, res) => {
   res.json({
-    oauthEnabled: hasOAuthConfig(),
-    devAuthEnabled: DEV_AUTH_ENABLED
+    oauthEnabled: AVAILABLE_PROVIDERS.length > 0,
+    providers: AVAILABLE_PROVIDERS,
+    devAuthEnabled: DEV_AUTH_ENABLED,
+    emailEnabled: true
   });
 });
 
@@ -107,25 +158,113 @@ app.post('/api/auth/dev-login', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/auth/login', (req, res) => {
-  if (!hasOAuthConfig()) return res.status(503).send('OAuth is not configured on this server.');
+// Password hashing helpers
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${derived}`;
+}
 
+function verifyPassword(password, stored) {
+  if (!stored) return false;
+  const [salt, derived] = stored.split(':');
+  try {
+    const test = crypto.scryptSync(password, salt, 64).toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(test, 'hex'), Buffer.from(derived, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+// Register with email
+app.post('/api/auth/register', (req, res) => {
+  const name = cleanString(req.body?.name, '');
+  const email = (req.body?.email || '').toLowerCase().trim();
+  const password = req.body?.password || '';
+  
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  }
+  if (users.has(email)) {
+    return res.status(409).json({ error: 'User already exists.' });
+  }
+  
+  const passwordHash = hashPassword(password);
+  const user = {
+    id: `user:${email}`,
+    name: name || email.split('@')[0],
+    email,
+    passwordHash,
+    provider: 'email',
+    createdAt: new Date().toISOString()
+  };
+  
+  users.set(email, user);
+  saveUsersDB(users);
+  
+  createSession(res, { id: user.id, name: user.name, email: user.email, provider: 'email' });
+  res.json({ ok: true });
+});
+
+// Login with email
+app.post('/api/auth/login', (req, res) => {
+  const email = (req.body?.email || '').toLowerCase().trim();
+  const password = req.body?.password || '';
+  
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+  
+  const user = users.get(email);
+  if (!user || !verifyPassword(password, user.passwordHash)) {
+    return res.status(401).json({ error: 'Invalid email or password.' });
+  }
+  
+  createSession(res, { id: user.id, name: user.name, email: user.email, provider: 'email' });
+  res.json({ ok: true });
+});
+
+app.get('/auth/login/:provider', (req, res) => {
+  const provider = req.params.provider?.toLowerCase();
+  
+  if (!provider || !OAUTH[provider]) {
+    return res.status(400).send(`OAuth provider "${provider}" is not configured.`);
+  }
+
+  const config = OAUTH[provider];
   const state = randomToken();
-  const verifier = OAUTH.provider === 'github' ? '' : base64Url(crypto.randomBytes(32));
-  oauthStates.set(state, { verifier, createdAt: Date.now() });
+  const verifier = config.usesPKCE ? base64Url(crypto.randomBytes(32)) : '';
+  oauthStates.set(state, { provider, verifier, createdAt: Date.now() });
 
-  const url = new URL(OAUTH.authUrl);
+  const url = new URL(config.authUrl);
   url.searchParams.set('response_type', 'code');
-  url.searchParams.set('client_id', OAUTH.clientId);
-  url.searchParams.set('redirect_uri', OAUTH.redirectUri);
-  url.searchParams.set('scope', OAUTH.scope);
+  url.searchParams.set('client_id', config.clientId);
+  url.searchParams.set('redirect_uri', config.redirectUri);
+  url.searchParams.set('scope', config.scope);
   url.searchParams.set('state', state);
-  if (verifier) {
+  
+  if (config.usesPKCE && verifier) {
     const challenge = base64Url(crypto.createHash('sha256').update(verifier).digest());
     url.searchParams.set('code_challenge', challenge);
     url.searchParams.set('code_challenge_method', 'S256');
   }
+
+  if (provider === 'microsoft') {
+    url.searchParams.set('response_mode', 'query');
+  }
+
   res.redirect(url.toString());
+});
+
+app.get('/auth/login', (req, res) => {
+  if (AVAILABLE_PROVIDERS.length === 0) {
+    return res.status(503).send('OAuth is not configured on this server.');
+  }
+  // Default to first available provider
+  res.redirect(`/auth/login/${AVAILABLE_PROVIDERS[0]}`);
 });
 
 app.get('/auth/callback', async (req, res) => {
@@ -133,38 +272,55 @@ app.get('/auth/callback', async (req, res) => {
     const { code, state } = req.query;
     const saved = oauthStates.get(state);
     oauthStates.delete(state);
+    
     if (!code || !saved || Date.now() - saved.createdAt > 10 * 60 * 1000) {
       return res.status(400).send('OAuth state is invalid or expired.');
     }
 
+    const provider = saved.provider;
+    if (!provider || !OAUTH[provider]) {
+      return res.status(400).send('OAuth provider is invalid or not configured.');
+    }
+
+    const config = OAUTH[provider];
     const tokenBody = new URLSearchParams({
       code: String(code),
-      redirect_uri: OAUTH.redirectUri,
-      client_id: OAUTH.clientId
+      redirect_uri: config.redirectUri,
+      client_id: config.clientId,
+      grant_type: 'authorization_code'
     });
-    if (OAUTH.provider !== 'github') {
-      tokenBody.set('grant_type', 'authorization_code');
+
+    if (config.usesPKCE && saved.verifier) {
       tokenBody.set('code_verifier', saved.verifier);
     }
-    if (OAUTH.clientSecret) tokenBody.set('client_secret', OAUTH.clientSecret);
+    if (config.clientSecret) {
+      tokenBody.set('client_secret', config.clientSecret);
+    }
 
-    const tokenRes = await fetch(OAUTH.tokenUrl, {
+    const tokenRes = await fetch(config.tokenUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
       body: tokenBody
     });
-    if (!tokenRes.ok) throw new Error(`Token exchange failed with ${tokenRes.status}`);
+    
+    if (!tokenRes.ok) {
+      const errorText = await tokenRes.text();
+      throw new Error(`Token exchange failed with ${tokenRes.status}: ${errorText}`);
+    }
+    
     const token = await tokenRes.json();
-
-    const profile = await loadUserProfile(token);
+    const profile = await loadUserProfile(provider, token);
+    
     createSession(res, {
-      id: profile.sub || profile.id || profile.email || randomToken(),
-      name: profile.name || profile.preferred_username || profile.email || 'MZH User',
+      id: profile.sub || profile.id || profile.oid || profile.email || randomToken(),
+      name: profile.name || profile.preferred_username || profile.email || `${provider} User`,
       email: profile.email || '',
-      provider: 'oauth'
+      provider: provider
     });
+    
     res.redirect('/');
   } catch (error) {
+    console.error('OAuth callback error:', error);
     res.status(500).send(`OAuth login failed: ${error.message}`);
   }
 });
@@ -269,7 +425,13 @@ app.post('/api/chat', requireAuth, async (req, res) => {
   }
 });
 
-app.use((_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.use((req, res) => {
+  const user = getUser(req);
+  if (!user) {
+    return res.redirect('/login');
+  }
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 app.listen(PORT, () => {
   console.log(`MZH-ONYX running on http://localhost:${PORT}`);
@@ -337,53 +499,77 @@ async function streamOpenRouter(res, model, messages) {
   }
 }
 
-async function loadUserProfile(token) {
-  if (OAUTH.userInfoUrl && token.access_token) {
-    const profileRes = await fetch(OAUTH.userInfoUrl, {
+async function loadUserProfile(provider, token) {
+  const config = OAUTH[provider];
+  
+  if (!config || !config.userInfoUrl || !token.access_token) {
+    return {};
+  }
+
+  try {
+    const profileRes = await fetch(config.userInfoUrl, {
       headers: {
         authorization: `Bearer ${token.access_token}`,
         accept: 'application/json',
         'user-agent': 'MZH-ONYX'
       }
     });
-    if (profileRes.ok) {
-      const profile = await profileRes.json();
-      if (OAUTH.provider === 'github' && !profile.email && OAUTH.emailsUrl) {
-        profile.email = await loadGitHubPrimaryEmail(token.access_token);
+
+    if (!profileRes.ok) {
+      throw new Error(`Failed to fetch user profile: ${profileRes.status}`);
+    }
+
+    const profile = await profileRes.json();
+    return normalizeProfile(provider, profile);
+  } catch (error) {
+    console.error(`Error loading ${provider} profile:`, error);
+    // Try to use ID token if available
+    if (token.id_token) {
+      const [, payload] = token.id_token.split('.');
+      if (payload) {
+        try {
+          return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+        } catch (e) {
+          console.error('Error parsing ID token:', e);
+        }
       }
-      return normalizeProfile(profile);
     }
+    return {};
   }
-
-  if (token.id_token) {
-    const [, payload] = token.id_token.split('.');
-    if (payload) return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-  }
-  return {};
 }
 
-async function loadGitHubPrimaryEmail(accessToken) {
-  const emailRes = await fetch(OAUTH.emailsUrl, {
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      accept: 'application/json',
-      'user-agent': 'MZH-ONYX'
-    }
-  });
-  if (!emailRes.ok) return '';
-  const emails = await emailRes.json();
-  return emails.find(email => email.primary && email.verified)?.email || emails.find(email => email.verified)?.email || '';
-}
-
-function normalizeProfile(profile) {
-  if (OAUTH.provider !== 'github') return profile;
-  return {
-    id: String(profile.id || profile.node_id || profile.login || ''),
-    name: profile.name || profile.login || profile.email || 'GitHub User',
-    email: profile.email || '',
-    preferred_username: profile.login || '',
-    avatar_url: profile.avatar_url || ''
-  };
+function normalizeProfile(provider, profile) {
+  switch (provider.toLowerCase()) {
+    case 'google':
+      return {
+        id: profile.id,
+        sub: profile.id,
+        name: profile.name,
+        email: profile.email,
+        picture: profile.picture
+      };
+    
+    case 'microsoft':
+      return {
+        id: profile.id,
+        oid: profile.id,
+        name: profile.displayName,
+        email: profile.mail || profile.userPrincipalName,
+        picture: null
+      };
+    
+    case 'github':
+      return {
+        id: String(profile.id || profile.node_id || profile.login || ''),
+        name: profile.name || profile.login || profile.email || 'GitHub User',
+        email: profile.email || '',
+        preferred_username: profile.login || '',
+        avatar_url: profile.avatar_url || ''
+      };
+    
+    default:
+      return profile;
+  }
 }
 
 function requireAuth(req, res, next) {
@@ -457,22 +643,6 @@ function verifySessionCookie(value) {
   const expected = crypto.createHmac('sha256', SESSION_SECRET).update(sid).digest('base64url');
   if (actual.length !== expected.length) return '';
   return crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(expected)) ? sid : '';
-}
-
-function hasOAuthConfig() {
-  return Boolean(OAUTH.authUrl && OAUTH.tokenUrl && OAUTH.clientId && (OAUTH.provider !== 'github' || OAUTH.clientSecret));
-}
-
-function applyProviderDefaults(oauth) {
-  if (oauth.provider === 'github') {
-    oauth.authUrl ||= 'https://github.com/login/oauth/authorize';
-    oauth.tokenUrl ||= 'https://github.com/login/oauth/access_token';
-    oauth.userInfoUrl ||= 'https://api.github.com/user';
-    oauth.emailsUrl ||= 'https://api.github.com/user/emails';
-    oauth.scope ||= 'read:user user:email';
-  } else {
-    oauth.scope ||= 'openid profile email';
-  }
 }
 
 function openRouterHeaders() {

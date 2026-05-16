@@ -300,7 +300,7 @@
       <div class="brand-mark">M</div>
       <div>
         <h1>MZH-ONYX</h1>
-        <span>Claude-light AI workspace</span>
+        <span>AI workspace</span>
       </div>
     </div>
 
@@ -412,14 +412,6 @@
         fetchJson('/api/auth/me')
       ]);
 
-      document.getElementById('oauthLogin').classList.toggle('hidden', !config.oauthEnabled);
-      document.getElementById('devLogin').classList.toggle('hidden', !config.devAuthEnabled);
-      document.getElementById('authNote').textContent = config.oauthEnabled
-        ? 'Use your configured identity provider to continue.'
-        : config.devAuthEnabled
-          ? 'OAuth is not configured yet, so local development login is available.'
-          : 'OAuth is required but not configured on this server.';
-
       if (me.authenticated) {
         authUser = me.user;
         authScreen.classList.add('hidden');
@@ -430,8 +422,8 @@
         setStatus('Authenticated. Loading models...', false);
         userInput.disabled = false;
       } else {
-        authScreen.classList.remove('hidden');
-        setStatus('Authentication required', false);
+        // Redirect to dedicated login page
+        window.location.href = '/login.html';
       }
     }
 
