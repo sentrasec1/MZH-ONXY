@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: mzh-onyx
+    env: node
+    plan: free
+    repo: https://github.com/sentrasec1/MZH-ONXY
+    buildCommand: npm install --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: APP_URL
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OAUTH_PROVIDER
+        value: github
+      - key: OAUTH_CLIENT_ID
+        sync: false
+      - key: OAUTH_CLIENT_SECRET
+        sync: false
+      - key: OAUTH_REDIRECT_URI
+        sync: false
+      - key: OAUTH_SCOPE
+        value: read:user user:email
+      - key: DEV_AUTH_ENABLED
+        value: "false"

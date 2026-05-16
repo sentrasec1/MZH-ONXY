@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MZH-ONYX AI Workspace</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231E7A5F'%3E%3Cpath d='M12 2l2.4 7.2L22 11.6l-5.6 4.4L17.8 22 12 17.6 6.2 22l1.4-6-5.6-4.4 7.6-2.4z'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --canvas: #F6F7F4;
+      --panel: #FFFFFF;
+      --panel-soft: #EEF3EE;
+      --ink: #171A18;
+      --muted: #657068;
+      --faint: #9AA39C;
+      --line: #D9E0DA;
+      --primary: #1E7A5F;
+      --primary-dark: #14553F;
+      --primary-soft: rgba(30, 122, 95, 0.1);
+      --warning: #B4542D;
+      --shadow: 0 18px 45px rgba(27, 34, 29, 0.12);
+      --sidebar: 282px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      color: var(--ink);
+      background: var(--canvas);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, select, textarea, input { font: inherit; }
+    button { cursor: pointer; }
+    .hidden { display: none !important; }
+
+    .sidebar {
+      width: var(--sidebar);
+      min-width: var(--sidebar);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 18px 14px;
+      background: #EFF2ED;
+      border-right: 1px solid var(--line);
+    }
+
+    .brand { display: flex; align-items: center; gap: 10px; min-height: 42px; }
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: white;
+      background: var(--primary);
+      font-weight: 800;
+    }
+    .brand h1 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+    .brand span { display: block; color: var(--muted); font-size: 0.74rem; margin-top: 1px; }
+
+    .new-chat {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-weight: 650;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .new-chat:hover { border-color: #B7C3BA; }
+
+    .history { flex: 1; overflow-y: auto; }
+    .section-title {
+      margin: 10px 6px 8px;
+      color: var(--faint);
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .history-item {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 8px 9px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      background: transparent;
+      color: var(--muted);
+      text-align: left;
+    }
+    .history-item:hover, .history-item.active { background: var(--panel); color: var(--ink); border-color: var(--line); }
+    .history-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .history-actions { display: flex; gap: 2px; opacity: 0; }
+    .history-item:hover .history-actions { opacity: 1; }
+    .mini-btn {
+      width: 28px;
+      height: 28px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+    }
+    .mini-btn:hover { background: var(--panel-soft); color: var(--ink); }
+
+    .account {
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--primary-soft);
+      color: var(--primary-dark);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      flex: 0 0 auto;
+    }
+    .account-meta { min-width: 0; flex: 1; }
+    .account-name { font-size: 0.86rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .account-provider { font-size: 0.72rem; color: var(--muted); }
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+    }
+    .topbar {
+      height: 62px;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      justify-content: space-between;
+      padding: 10px 22px;
+      border-bottom: 1px solid var(--line);
+    }
+    .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.83rem; }
+    .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--warning); }
+    .dot.ready { background: var(--primary); }
+
+    .model-wrap { display: flex; align-items: center; gap: 10px; min-width: 280px; }
+    .model-wrap label { color: var(--muted); font-size: 0.82rem; font-weight: 650; }
+    select {
+      width: min(48vw, 430px);
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      color: var(--ink);
+      padding: 0 10px;
+      outline: none;
+    }
+
+    .chat {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 26px clamp(18px, 8vw, 118px);
+      scroll-behavior: smooth;
+    }
+    .welcome { margin: auto; max-width: 620px; text-align: center; }
+    .welcome h2 { margin: 0 0 10px; font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1.05; }
+    .welcome p { margin: 0; color: var(--muted); font-size: 1rem; line-height: 1.6; }
+
+    .message {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 12px;
+      animation: rise 0.2s ease-out;
+    }
+    .message.user { grid-template-columns: minmax(0, 1fr) 34px; }
+    .message.user .bubble { grid-column: 1; justify-self: end; background: #EAF1EA; max-width: min(780px, 82%); }
+    .message.user .avatar { grid-column: 2; grid-row: 1; background: #ECE7DC; color: #5C4C31; }
+    .bubble {
+      min-width: 0;
+      padding: 12px 14px;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      line-height: 1.65;
+      color: var(--ink);
+    }
+    .message.assistant .bubble { padding-top: 5px; }
+    .message.thinking .avatar { animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 50% { transform: scale(1.08); box-shadow: 0 0 0 8px rgba(30, 122, 95, 0.08); } }
+
+    .composer-wrap { flex: 0 0 auto; padding: 0 clamp(18px, 8vw, 118px) 22px; }
+    .composer {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 8px 26px rgba(27, 34, 29, 0.08);
+    }
+    .composer-row { display: flex; align-items: flex-end; gap: 8px; padding: 8px; }
+    textarea {
+      min-height: 44px;
+      max-height: 190px;
+      flex: 1;
+      resize: none;
+      border: 0;
+      outline: 0;
+      padding: 11px 8px;
+      color: var(--ink);
+      background: transparent;
+      line-height: 1.45;
+    }
+    .icon-btn {
+      width: 42px;
+      height: 42px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+    .icon-btn:hover { background: var(--panel-soft); color: var(--ink); }
+    .send { background: var(--primary); color: white; }
+    .send:hover { background: var(--primary-dark); color: white; }
+    .send:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .auth-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      background: var(--canvas);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .auth-card {
+      width: min(100%, 430px);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 26px;
+    }
+    .auth-card h2 { margin: 12px 0 8px; font-size: 1.8rem; }
+    .auth-card p { margin: 0 0 18px; color: var(--muted); line-height: 1.55; }
+    .auth-actions { display: grid; gap: 10px; }
+    .primary-btn, .secondary-btn {
+      height: 42px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .primary-btn { background: var(--primary); color: white; border-color: var(--primary); }
+    .primary-btn:hover { background: var(--primary-dark); }
+    .secondary-btn { background: var(--panel-soft); color: var(--ink); }
+    .auth-note { margin-top: 14px; color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+
+    @media (max-width: 760px) {
+      body { display: block; overflow: auto; height: auto; min-height: 100vh; }
+      .sidebar { width: 100%; min-width: 0; height: auto; max-height: 38vh; }
+      .main { height: 62vh; min-height: 520px; }
+      .topbar { align-items: flex-start; height: auto; flex-direction: column; }
+      .model-wrap { width: 100%; min-width: 0; }
+      select { width: 100%; }
+      .message.user .bubble { max-width: 92%; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">M</div>
+      <div>
+        <h1>MZH-ONYX</h1>
+        <span>Production AI workspace</span>
+      </div>
+    </div>
+
+    <button class="new-chat" id="newChatBtn" title="Start a new chat">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+      New chat
+    </button>
+
+    <div class="history">
+      <div class="section-title">Recent</div>
+      <div id="recentList"></div>
+    </div>
+
+    <div class="account hidden" id="accountBox">
+      <div class="avatar" id="accountAvatar">U</div>
+      <div class="account-meta">
+        <div class="account-name" id="accountName">Signed in</div>
+        <div class="account-provider" id="accountProvider">OAuth</div>
+      </div>
+      <button class="mini-btn" id="logoutBtn" title="Sign out">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="status">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">Checking authentication...</span>
+      </div>
+      <div class="model-wrap">
+        <label for="modelSelect">Model</label>
+        <select id="modelSelect" disabled>
+          <option>Loading models...</option>
+        </select>
+      </div>
+    </header>
+
+    <div class="chat" id="chatContainer">
+      <div class="welcome" id="welcome">
+        <h2>MZH-ONYX</h2>
+        <p>Sign in, choose an available local or hosted model, and start a private workspace conversation.</p>
+      </div>
+    </div>
+
+    <div class="composer-wrap">
+      <div class="composer">
+        <div class="composer-row">
+          <button class="icon-btn" id="refreshModelsBtn" title="Refresh models">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16"/><path d="M3 16v5h5"/><path d="M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 8V3h-5"/></svg>
+          </button>
+          <textarea id="userInput" placeholder="Message MZH-ONYX..." rows="1" disabled></textarea>
+          <button class="icon-btn send" id="sendBtn" title="Send" disabled>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="auth-screen" id="authScreen">
+    <div class="auth-card">
+      <div class="brand-mark">M</div>
+      <h2>Sign in to MZH-ONYX</h2>
+      <p>OAuth protects the workspace and keeps provider keys on the server. Development login appears only when OAuth is not configured outside production.</p>
+      <div class="auth-actions">
+        <a href="/auth/login" class="primary-btn hidden" id="oauthLogin">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>
+          Continue with OAuth
+        </a>
+        <button class="secondary-btn hidden" id="devLogin">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Development login
+        </button>
+      </div>
+      <div class="auth-note" id="authNote">Loading authentication options...</div>
+    </div>
+  </div>
+
+  <script>
+    const storeKey = 'mzh_onyx_chats_v2';
+    let chats = JSON.parse(localStorage.getItem(storeKey) || '[]');
+    let currentChatId = null;
+    let authUser = null;
+    let isSending = false;
+
+    const chatContainer = document.getElementById('chatContainer');
+    const welcome = document.getElementById('welcome');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const recentList = document.getElementById('recentList');
+    const modelSelect = document.getElementById('modelSelect');
+    const statusText = document.getElementById('statusText');
+    const statusDot = document.getElementById('statusDot');
+    const authScreen = document.getElementById('authScreen');
+
+    boot();
+
+    async function boot() {
+      renderHistory();
+      await loadAuth();
+      if (authUser) await loadModels();
+    }
+
+    async function loadAuth() {
+      const [config, me] = await Promise.all([
+        fetchJson('/api/auth/config'),
+        fetchJson('/api/auth/me')
+      ]);
+
+      document.getElementById('oauthLogin').classList.toggle('hidden', !config.oauthEnabled);
+      document.getElementById('devLogin').classList.toggle('hidden', !config.devAuthEnabled);
+      document.getElementById('authNote').textContent = config.oauthEnabled
+        ? 'Use your configured identity provider to continue.'
+        : config.devAuthEnabled
+          ? 'OAuth is not configured yet, so local development login is available.'
+          : 'OAuth is required but not configured on this server.';
+
+      if (me.authenticated) {
+        authUser = me.user;
+        authScreen.classList.add('hidden');
+        document.getElementById('accountBox').classList.remove('hidden');
+        document.getElementById('accountName').textContent = authUser.name || authUser.email || 'Signed in';
+        document.getElementById('accountProvider').textContent = authUser.provider || 'OAuth';
+        document.getElementById('accountAvatar').textContent = initials(authUser.name || authUser.email || 'U');
+        setStatus('Authenticated. Loading models...', false);
+        userInput.disabled = false;
+      } else {
+        authScreen.classList.remove('hidden');
+        setStatus('Authentication required', false);
+      }
+    }
+
+    async function loadModels() {
+      modelSelect.disabled = true;
+      modelSelect.innerHTML = '<option>Loading models...</option>';
+      try {
+        const { models } = await fetchJson('/api/models');
+        modelSelect.innerHTML = '';
+        const grouped = models.reduce((acc, model) => {
+          (acc[model.provider] ||= []).push(model);
+          return acc;
+        }, {});
+        for (const [provider, items] of Object.entries(grouped)) {
+          const group = document.createElement('optgroup');
+          group.label = provider;
+          for (const model of items) {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.name;
+            group.appendChild(option);
+          }
+          modelSelect.appendChild(group);
+        }
+        modelSelect.disabled = false;
+        sendBtn.disabled = false;
+        setStatus(`${models.length} model${models.length === 1 ? '' : 's'} available`, true);
+      } catch (error) {
+        modelSelect.innerHTML = '<option>No models available</option>';
+        setStatus(error.message || 'Could not load models', false);
+      }
+    }
+
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text || isSending || modelSelect.disabled) return;
+      isSending = true;
+      sendBtn.disabled = true;
+
+      if (!currentChatId) {
+        currentChatId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+        chats.unshift({ id: currentChatId, title: text.slice(0, 42), messages: [], createdAt: Date.now() });
+      }
+
+      const chat = chats.find(c => c.id === currentChatId);
+      hideWelcome();
+      appendMessage('user', text);
+      chat.messages.push({ role: 'user', content: text });
+      userInput.value = '';
+      userInput.style.height = 'auto';
+      saveChats();
+
+      const assistant = appendMessage('assistant', '', true);
+      const bubble = assistant.querySelector('.bubble');
+      let aiText = '';
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: modelSelect.value,
+            messages: chat.messages
+          })
+        });
+        if (!response.ok || !response.body) throw new Error(await readError(response));
+
+        assistant.classList.remove('thinking');
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split('\n\n');
+          buffer = events.pop() || '';
+          for (const event of events) {
+            const line = event.split('\n').find(part => part.startsWith('data:'));
+            if (!line) continue;
+            const payload = JSON.parse(line.slice(5).trim());
+            if (payload.error) throw new Error(payload.error);
+            if (payload.content) {
+              aiText += payload.content;
+              bubble.textContent = aiText;
+              chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+          }
+        }
+
+        chat.messages.push({ role: 'assistant', content: aiText || '(No response returned.)' });
+        saveChats();
+      } catch (error) {
+        assistant.classList.remove('thinking');
+        bubble.textContent = `Error: ${error.message || 'The model request failed.'}`;
+      } finally {
+        isSending = false;
+        sendBtn.disabled = false;
+        userInput.focus();
+      }
+    }
+
+    function appendMessage(role, content, thinking = false) {
+      const message = document.createElement('div');
+      message.className = `message ${role}${thinking ? ' thinking' : ''}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.textContent = role === 'user' ? initials(authUser?.name || 'U') : 'AI';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = content;
+
+      if (role === 'user') {
+        message.append(bubble, avatar);
+      } else {
+        message.append(avatar, bubble);
+      }
+      chatContainer.appendChild(message);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      return message;
+    }
+
+    function loadChat(id) {
+      currentChatId = id;
+      const chat = chats.find(c => c.id === id);
+      chatContainer.innerHTML = '';
+      chat.messages.forEach(message => appendMessage(message.role, message.content));
+      renderHistory();
+    }
+
+    function renderHistory() {
+      recentList.innerHTML = '';
+      chats.forEach(chat => {
+        const item = document.createElement('button');
+        item.className = `history-item${chat.id === currentChatId ? ' active' : ''}`;
+        item.type = 'button';
+
+        const text = document.createElement('span');
+        text.className = 'history-text';
+        text.textContent = chat.title || 'Untitled chat';
+
+        const actions = document.createElement('span');
+        actions.className = 'history-actions';
+        const rename = historyButton('Rename', 'M13 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-7|M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z');
+        const remove = historyButton('Delete', 'M3 6h18|M8 6V4h8v2|M19 6l-1 14H6L5 6|M10 11v6|M14 11v6');
+        rename.onclick = (event) => {
+          event.stopPropagation();
+          const value = prompt('Rename chat', chat.title || '');
+          if (value?.trim()) {
+            chat.title = value.trim();
+            saveChats();
+          }
+        };
+        remove.onclick = (event) => {
+          event.stopPropagation();
+          if (!confirm('Delete this chat?')) return;
+          chats = chats.filter(c => c.id !== chat.id);
+          if (currentChatId === chat.id) startNewChat();
+          saveChats();
+        };
+        actions.append(rename, remove);
+        item.append(text, actions);
+        item.onclick = () => loadChat(chat.id);
+        recentList.appendChild(item);
+      });
+    }
+
+    function historyButton(title, pathData) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'mini-btn';
+      button.title = title;
+      button.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${pathData.split('|').map(d => `<path d="${d}"/>`).join('')}</svg>`;
+      return button;
+    }
+
+    function startNewChat() {
+      currentChatId = null;
+      chatContainer.innerHTML = '';
+      chatContainer.appendChild(welcome);
+      welcome.classList.remove('hidden');
+      renderHistory();
+      userInput.focus();
+    }
+
+    function hideWelcome() {
+      welcome.classList.add('hidden');
+      if (welcome.parentNode) welcome.parentNode.removeChild(welcome);
+    }
+
+    function saveChats() {
+      localStorage.setItem(storeKey, JSON.stringify(chats));
+      renderHistory();
+    }
+
+    function setStatus(text, ready) {
+      statusText.textContent = text;
+      statusDot.classList.toggle('ready', ready);
+    }
+
+    function initials(value) {
+      return value.split(/[^\w]+/).filter(Boolean).slice(0, 2).map(part => part[0].toUpperCase()).join('') || 'U';
+    }
+
+    async function fetchJson(url, options) {
+      const response = await fetch(url, options);
+      if (!response.ok) throw new Error(await readError(response));
+      return response.json();
+    }
+
+    async function readError(response) {
+      const text = await response.text().catch(() => '');
+      try {
+        return JSON.parse(text).error || response.statusText;
+      } catch {
+        return text || response.statusText;
+      }
+    }
+
+    document.getElementById('newChatBtn').onclick = startNewChat;
+    document.getElementById('sendBtn').onclick = sendMessage;
+    document.getElementById('refreshModelsBtn').onclick = loadModels;
+    document.getElementById('devLogin').onclick = async () => {
+      await fetchJson('/api/auth/dev-login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'MZH User' })
+      });
+      await boot();
+    };
+    document.getElementById('logoutBtn').onclick = async () => {
+      await fetchJson('/auth/logout', { method: 'POST' });
+      location.reload();
+    };
+    userInput.oninput = function () {
+      this.style.height = 'auto';
+      this.style.height = `${this.scrollHeight}px`;
+    };
+    userInput.onkeydown = (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    };
+  </script>
+</body>
+</html>

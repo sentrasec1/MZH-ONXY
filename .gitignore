@@ -1,0 +1,7 @@
+node_modules/
+.env
+.env.*
+!.env.example
+open_apikey.txt
+npm-debug.log*
+server.*.log
