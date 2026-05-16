@@ -32,6 +32,13 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || (IS_PROD ? '' : readSecretFile('open_apikey.txt'));
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
 const DEV_AUTH_ENABLED = process.env.DEV_AUTH_ENABLED !== 'false' && !IS_PROD;
+const LOCAL_MODELS_ENABLED = !IS_PROD || process.env.ENABLE_OLLAMA === 'true';
+const PREFERRED_HOSTED_MODELS = [
+  { id: 'openrouter:anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5', provider: 'Anthropic via OpenRouter' },
+  { id: 'openrouter:anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5', provider: 'Anthropic via OpenRouter' },
+  { id: 'openrouter:openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI via OpenRouter' },
+  { id: 'openrouter:openrouter/auto', name: 'Auto Router', provider: 'OpenRouter' }
+];
 
 if (IS_PROD && !SESSION_SECRET) {
   throw new Error('SESSION_SECRET is required when NODE_ENV=production.');
@@ -172,41 +179,64 @@ app.post('/auth/logout', (req, res) => {
 app.get('/api/models', requireAuth, async (_req, res) => {
   const models = [];
 
-  try {
-    const ollamaRes = await fetch(`${OLLAMA_URL}/api/tags`);
-    if (ollamaRes.ok) {
-      const data = await ollamaRes.json();
-      for (const model of data.models || []) {
-        models.push({ id: `ollama:${model.name}`, name: model.name, provider: 'Ollama' });
+  if (LOCAL_MODELS_ENABLED) {
+    try {
+      const ollamaRes = await fetch(`${OLLAMA_URL}/api/tags`);
+      if (ollamaRes.ok) {
+        const data = await ollamaRes.json();
+        for (const model of data.models || []) {
+          models.push({ id: `ollama:${model.name}`, name: model.name, provider: 'Ollama' });
+        }
       }
+    } catch {
+      // Local Ollama is optional.
     }
-  } catch {
-    // Local Ollama is optional in production.
   }
 
   if (OPENROUTER_API_KEY) {
+    const byId = new Map(PREFERRED_HOSTED_MODELS.map(model => [model.id, model]));
     try {
       const routerRes = await fetch(`${OPENROUTER_URL}/models`, {
         headers: openRouterHeaders()
       });
       if (routerRes.ok) {
         const data = await routerRes.json();
-        for (const model of (data.data || []).slice(0, 150)) {
-          models.push({ id: `openrouter:${model.id}`, name: model.name || model.id, provider: 'OpenRouter' });
+        for (const model of data.data || []) {
+          byId.set(`openrouter:${model.id}`, {
+            id: `openrouter:${model.id}`,
+            name: model.name || model.id,
+            provider: providerLabel(model)
+          });
         }
       }
     } catch {
-      // Keep the local list usable even if the hosted catalog is unavailable.
+      // Keep curated hosted models available even if the catalog endpoint is temporarily unavailable.
+    }
+
+    for (const preferred of PREFERRED_HOSTED_MODELS) {
+      const model = byId.get(preferred.id) || preferred;
+      models.push(model);
+      byId.delete(preferred.id);
+    }
+
+    for (const model of byId.values()) {
+      if (models.length >= 80) break;
+      const isChatModel = !/(audio|image|embed|tts|transcribe|whisper|rerank)/i.test(model.id + model.name);
+      if (isChatModel) models.push(model);
     }
   }
 
-  if (!models.length) {
+  if (!models.length && LOCAL_MODELS_ENABLED) {
     models.push(
       { id: 'ollama:qwen2.5:7b', name: 'Qwen 2.5 - 7B', provider: 'Ollama' },
       { id: 'ollama:deepseek-coder-v2:16b', name: 'DeepSeek Coder V2 - 16B', provider: 'Ollama' },
       { id: 'ollama:llama3.1:8b', name: 'Llama 3.1 - 8B', provider: 'Ollama' },
       { id: 'ollama:gemma2:9b', name: 'Gemma 2 - 9B', provider: 'Ollama' }
     );
+  }
+
+  if (!models.length) {
+    return res.status(503).json({ error: 'No hosted model provider is configured. Set OPENROUTER_API_KEY.' });
   }
 
   res.json({ models });
@@ -226,6 +256,8 @@ app.post('/api/chat', requireAuth, async (req, res) => {
   try {
     if (model.startsWith('openrouter:')) {
       await streamOpenRouter(res, model.replace('openrouter:', ''), messages);
+    } else if (!LOCAL_MODELS_ENABLED) {
+      throw new Error('Local Ollama models are disabled in production. Choose a hosted model.');
     } else {
       await streamOllama(res, model.replace('ollama:', ''), messages);
     }
@@ -449,6 +481,16 @@ function openRouterHeaders() {
     'HTTP-Referer': process.env.APP_URL || `http://localhost:${PORT}`,
     'X-Title': 'MZH-ONYX'
   };
+}
+
+function providerLabel(model) {
+  const id = String(model.id || '');
+  if (id.startsWith('anthropic/')) return 'Anthropic via OpenRouter';
+  if (id.startsWith('openai/')) return 'OpenAI via OpenRouter';
+  if (id.startsWith('google/')) return 'Google via OpenRouter';
+  if (id.startsWith('meta-llama/')) return 'Meta via OpenRouter';
+  if (id.startsWith('deepseek/')) return 'DeepSeek via OpenRouter';
+  return 'OpenRouter';
 }
 
 function cleanString(value, fallback) {
