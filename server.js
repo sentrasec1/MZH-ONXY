@@ -61,7 +61,12 @@ app.get('/api/models', async (_req, res) => {
   if (!OPENROUTER_API_KEY) {
     return res.status(503).json({ error: 'No hosted model provider is configured. Set OPENROUTER_API_KEY.' });
   }
-  res.json({ models: [DEFAULT_MODEL] });
+  try {
+    const models = await getOpenRouterModels();
+    res.json({ models });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch models: ' + error.message });
+  }
 });
 
 app.post('/api/chat', async (req, res) => {
@@ -199,6 +204,30 @@ function readSecretFile(fileName) {
     return value || '';
   } catch {
     return '';
+  }
+}
+
+async function getOpenRouterModels() {
+  try {
+    const response = await fetch(`${OPENROUTER_URL}/models`, {
+      headers: openRouterHeaders()
+    });
+    if (!response.ok) throw new Error(`OpenRouter models API failed with ${response.status}`);
+    const data = await response.json();
+    
+    if (!Array.isArray(data.data)) return [DEFAULT_MODEL];
+    
+    return data.data
+      .filter(m => m.id && m.name && !m.id.includes('experimental'))
+      .map(m => ({
+        id: `openrouter:${m.id}`,
+        name: m.name,
+        provider: providerLabel({ id: m.id })
+      }))
+      .slice(0, 50);
+  } catch (error) {
+    console.error('Error fetching OpenRouter models:', error);
+    return [DEFAULT_MODEL];
   }
 }
 

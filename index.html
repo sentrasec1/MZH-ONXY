@@ -118,13 +118,6 @@
     }
     .mini-btn:hover { background: var(--panel-soft); color: var(--ink); }
 
-    .account {
-      border-top: 1px solid var(--line);
-      padding-top: 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
     .avatar {
       width: 34px;
       height: 34px;
@@ -136,9 +129,6 @@
       font-weight: 800;
       flex: 0 0 auto;
     }
-    .account-meta { min-width: 0; flex: 1; }
-    .account-name { font-size: 0.86rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .account-provider { font-size: 0.72rem; color: var(--muted); }
 
     .main {
       flex: 1;
@@ -247,41 +237,7 @@
     .send:hover { background: var(--primary-dark); color: white; }
     .send:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .auth-screen {
-      position: fixed;
-      inset: 0;
-      z-index: 20;
-      background: var(--canvas);
-      display: grid;
-      place-items: center;
-      padding: 24px;
-    }
-    .auth-card {
-      width: min(100%, 430px);
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      box-shadow: var(--shadow);
-      padding: 26px;
-    }
-    .auth-card h2 { margin: 12px 0 8px; font-size: 1.8rem; }
-    .auth-card p { margin: 0 0 18px; color: var(--muted); line-height: 1.55; }
-    .auth-actions { display: grid; gap: 10px; }
-    .primary-btn, .secondary-btn {
-      height: 42px;
-      border-radius: 8px;
-      border: 1px solid var(--line);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      text-decoration: none;
-      font-weight: 700;
-    }
-    .primary-btn { background: var(--primary); color: white; border-color: var(--primary); }
-    .primary-btn:hover { background: var(--primary-dark); }
-    .secondary-btn { background: var(--panel-soft); color: var(--ink); }
-    .auth-note { margin-top: 14px; color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+
 
     @media (max-width: 760px) {
       body { display: block; overflow: auto; height: auto; min-height: 100vh; }
