@@ -99,7 +99,7 @@ app.use((req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`MZH-ONYX running on http://localhost:${PORT}`);
+  console.log(`MZH-ONYX running on http://localhost:${PORT} - OAuth removed, OpenRouter only`);
 });
 
 async function streamOllama(res, model, messages) {
